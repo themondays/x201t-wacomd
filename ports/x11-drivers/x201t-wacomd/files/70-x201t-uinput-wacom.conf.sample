@@ -1,0 +1,13 @@
+# Runtime tuning for the x201t-wacomd uinput device.
+#
+# The X201 Tablet's serial digitizer reports pressure in a small 0..255 range.
+# xf86-input-wacom can otherwise choose a threshold that is too high for tip
+# clicks, so keep this low.
+
+Section "InputClass"
+        Identifier "X201T uinput Wacom tuning"
+        MatchProduct "X201 Tablet ISDv4 Pen"
+        MatchDriver "wacom"
+        Option "Threshold" "1"
+        Option "TPCButton" "on"
+EndSection

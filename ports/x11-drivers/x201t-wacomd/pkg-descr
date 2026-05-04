@@ -1,0 +1,10 @@
+x201t-wacomd is a small FreeBSD userspace bridge for the internal serial
+Wacom ISDv4 pen digitizer in the Lenovo ThinkPad X201 Tablet.
+
+It reads ISDv4 pen packets from the tablet serial device, typically
+/dev/cuau2 at 19200 baud, and can expose the tablet through /dev/uinput for
+Xorg or through /dev/consolectl for FreeBSD tty console pointer support.
+
+The XORG port option installs the xf86-input-wacom runtime dependency and the
+Xorg InputClass sample. Disable that option for console-only installations on
+systems without Xorg.

@@ -1,0 +1,61 @@
+#!/bin/sh
+
+# PROVIDE: x201t_wacomd
+# REQUIRE: FILESYSTEMS devd
+# BEFORE: sddm
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="x201t_wacomd"
+rcvar="x201t_wacomd_enable"
+command="/usr/sbin/daemon"
+procname="/usr/local/sbin/x201t-wacomd"
+pidfile="/var/run/${name}.pid"
+start_postcmd="${name}_poststart"
+
+load_rc_config "$name"
+
+: ${x201t_wacomd_enable:="NO"}
+: ${x201t_wacomd_device:="/dev/cuau2"}
+: ${x201t_wacomd_uinput:="/dev/uinput"}
+: ${x201t_wacomd_uinput_enable:="YES"}
+: ${x201t_wacomd_baud:="19200"}
+: ${x201t_wacomd_console_enable:="NO"}
+: ${x201t_wacomd_consolectl:="/dev/consolectl"}
+: ${x201t_wacomd_console_mode:="absolute"}
+: ${x201t_wacomd_console_scale:="32"}
+: ${x201t_wacomd_console_width:="1280"}
+: ${x201t_wacomd_console_height:="800"}
+: ${x201t_wacomd_console_cursor_enable:="YES"}
+
+x201t_wacomd_args="-d ${x201t_wacomd_device} -b ${x201t_wacomd_baud}"
+
+if checkyesno x201t_wacomd_uinput_enable; then
+	x201t_wacomd_args="${x201t_wacomd_args} -u ${x201t_wacomd_uinput}"
+else
+	x201t_wacomd_args="${x201t_wacomd_args} -U"
+fi
+
+if checkyesno x201t_wacomd_console_enable; then
+	x201t_wacomd_args="${x201t_wacomd_args} -C -c ${x201t_wacomd_consolectl} -M ${x201t_wacomd_console_mode} -S ${x201t_wacomd_console_scale} -W ${x201t_wacomd_console_width} -H ${x201t_wacomd_console_height}"
+fi
+
+x201t_wacomd_poststart()
+{
+	local ttyv
+
+	if ! checkyesno x201t_wacomd_console_enable ||
+	    ! checkyesno x201t_wacomd_console_cursor_enable; then
+		return 0
+	fi
+
+	for ttyv in /dev/ttyv*; do
+		[ -c "${ttyv}" ] || continue
+		vidcontrol -m on < "${ttyv}" >/dev/null 2>&1 || true
+	done
+}
+
+command_args="-f -p ${pidfile} ${procname} -f ${x201t_wacomd_args}"
+
+run_rc_command "$1"

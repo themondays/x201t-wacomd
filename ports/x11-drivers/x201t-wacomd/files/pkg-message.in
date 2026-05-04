@@ -1,0 +1,81 @@
+[
+{ type: install
+  message: <<EOM
+x201t-wacomd has been installed.
+
+This daemon is intended for the Lenovo ThinkPad X201 Tablet internal
+serial Wacom ISDv4 pen digitizer.
+
+Typical setup:
+
+  sysrc x201t_wacomd_enable=YES
+  sysrc x201t_wacomd_device=/dev/cuau2
+  sysrc x201t_wacomd_baud=19200
+  service x201t_wacomd start
+
+Optional tty console pointer support:
+
+  sysrc x201t_wacomd_console_enable=YES
+  sysrc x201t_wacomd_console_mode=absolute
+  sysrc x201t_wacomd_console_width=1280
+  sysrc x201t_wacomd_console_height=800
+  sysrc x201t_wacomd_console_scale=32
+  service x201t_wacomd restart
+
+The console backend writes FreeBSD console mouse events to /dev/consolectl.
+It works independently from Xorg. The rc.d script also runs vidcontrol -m on
+for /dev/ttyv* when console mode is enabled so the text-console pointer is
+visible.
+
+FreeBSD vt consoles accept relative mouse events through /dev/consolectl, not
+true tablet absolute-position events. The default absolute mode emulates tablet
+mapping by translating the pen target into bounded relative movement over a
+1280x800 console framebuffer.
+
+For a console-only setup without the Xorg/uinput backend:
+
+  sysrc x201t_wacomd_uinput_enable=NO
+  sysrc x201t_wacomd_console_enable=YES
+
+This port can be built without Xorg support:
+
+  make OPTIONS_UNSET=XORG install clean
+
+That installs only the daemon and rc.d service. Use it for minimal console-only
+FreeBSD setups.
+
+When built with the default XORG option, the port installs this Xorg tuning
+sample:
+
+  %%PREFIX%%/etc/X11/xorg.conf.d/70-x201t-uinput-wacom.conf.sample
+
+pkg(8) activates it as 70-x201t-uinput-wacom.conf when that file does not
+already exist. If you remove or replace the active config, keep the sample
+available for reference.
+
+Start x201t_wacomd before SDDM/Xorg, then restart the graphical session.
+Verify with:
+
+  xinput list
+  service x201t_wacomd status
+
+Expected Xorg devices:
+
+  X201 Tablet ISDv4 Pen stylus
+  X201 Tablet ISDv4 Pen eraser
+
+Operational notes:
+
+  * Run service status checks as root, or through sudo. The daemon pidfile is
+    root-owned, so unprivileged service status checks may report incorrectly.
+
+      sudo service x201t_wacomd status
+
+  * Do not leave executable backup copies in %%PREFIX%%/etc/rc.d. FreeBSD runs
+    every executable rc.d script found there. A backup such as
+    x201t_wacomd.old or x201t_wacomd.pre-console can start an older daemon
+    first, hold /dev/cuau2 open, and prevent the packaged service from starting
+    with the current console options.
+EOM
+}
+]

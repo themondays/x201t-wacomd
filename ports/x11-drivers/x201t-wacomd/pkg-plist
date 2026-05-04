@@ -1,0 +1,2 @@
+sbin/x201t-wacomd
+%%XORG%%@sample etc/X11/xorg.conf.d/70-x201t-uinput-wacom.conf.sample

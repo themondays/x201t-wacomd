@@ -1,0 +1,24 @@
+.DS_Store
+._*
+
+# Build output.
+/x201t-wacomd
+*.o
+*.core
+work/
+*/work/
+*.pkg
+*.txz
+*.tbz
+
+# Local machine state.
+local-state/
+*.local
+*.conf.local
+logs/
+tmp/
+
+# Editor state.
+*.swp
+*.swo
+*~
