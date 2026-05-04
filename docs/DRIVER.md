@@ -47,6 +47,8 @@ not understand the X201 Tablet's ISDv4 protocol directly.
   tty pointer to the pen target.
 - `-M relative` keeps the old relative-mouse behavior.
 - `-S 32` controls raw-tablet-to-relative-pointer scaling in relative mode.
+- `-E scroll` maps eraser-side vertical movement to mouse wheel/Z-axis events.
+- `-Z 768` controls eraser scroll sensitivity; lower values scroll faster.
 - `-W 1280 -H 800` set the console framebuffer dimensions used by absolute
   emulation.
 - `-U` disables `/dev/uinput` for console-only installs.
@@ -56,6 +58,13 @@ only processes relative events there. Absolute mode therefore tracks the
 daemon's last known tty pointer position and emits bounded relative movement to
 the tablet's absolute target. The pen tip maps to left button and the side
 switch maps to right button.
+
+When eraser mode is `scroll`, eraser proximity suppresses pointer movement and
+button state, then converts vertical eraser motion into `mouse_data.z` wheel
+events on `/dev/consolectl`. FreeBSD's console mouse stack accepts those
+events, but plain `vt(4)` scrollback behavior depends on the active consumer;
+some TUI programs or sysmouse/evdev consumers can use the wheel events, while
+kernel scrollback may still require keyboard-style fallback support.
 
 To avoid drift from Xorg or another console mouse, absolute mode recenters the
 tty mouse cursor with `MOUSE_HIDE`/`MOUSE_SHOW` on `/dev/ttyv0` through

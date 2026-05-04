@@ -19,6 +19,7 @@ need different defaults or packet handling.
 - Supports stylus tip, pressure, proximity, and side button.
 - Optional tty console pointer backend through `/dev/consolectl`.
 - Console absolute mode maps the tablet area to a configured framebuffer size.
+- Console eraser mode can emit wheel/Z-axis scroll events in tty mode.
 - Console-only mode can run without Xorg/uinput.
 - FreeBSD rc.d service.
 - Local FreeBSD port under `ports/x11-drivers/x201t-wacomd`.
@@ -41,7 +42,7 @@ sudo ./x201t-wacomd -f -v -d /dev/cuau2 -b 19200
 Console-only test:
 
 ```sh
-sudo ./x201t-wacomd -f -v -U -C -M absolute -W 1280 -H 800
+sudo ./x201t-wacomd -f -v -U -C -M absolute -E scroll -Z 768 -W 1280 -H 800
 ```
 
 ## FreeBSD Port
@@ -76,8 +77,16 @@ sudo sysrc x201t_wacomd_console_enable=YES
 sudo sysrc x201t_wacomd_console_mode=absolute
 sudo sysrc x201t_wacomd_console_width=1280
 sudo sysrc x201t_wacomd_console_height=800
+sudo sysrc x201t_wacomd_console_eraser_mode=scroll
+sudo sysrc x201t_wacomd_console_eraser_scroll_scale=768
 sudo service x201t_wacomd restart
 ```
+
+When console eraser mode is `scroll`, moving the eraser end vertically emits
+mouse wheel/Z-axis events instead of pointer motion. Lower
+`x201t_wacomd_console_eraser_scroll_scale` values make scrolling more
+sensitive. FreeBSD `vt` forwards these events through the console mouse stack;
+plain scrollback behavior still depends on what consumes those mouse events.
 
 Console-only setup:
 

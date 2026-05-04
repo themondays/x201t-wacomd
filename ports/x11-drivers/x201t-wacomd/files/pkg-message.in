@@ -20,6 +20,8 @@ Optional tty console pointer support:
   sysrc x201t_wacomd_console_width=1280
   sysrc x201t_wacomd_console_height=800
   sysrc x201t_wacomd_console_scale=32
+  sysrc x201t_wacomd_console_eraser_mode=scroll
+  sysrc x201t_wacomd_console_eraser_scroll_scale=768
   service x201t_wacomd restart
 
 The console backend writes FreeBSD console mouse events to /dev/consolectl.
@@ -31,6 +33,12 @@ FreeBSD vt consoles accept relative mouse events through /dev/consolectl, not
 true tablet absolute-position events. The default absolute mode emulates tablet
 mapping by translating the pen target into bounded relative movement over a
 1280x800 console framebuffer.
+
+When x201t_wacomd_console_eraser_mode=scroll, vertical eraser-side movement
+emits mouse wheel/Z-axis events instead of pointer motion. Lower
+x201t_wacomd_console_eraser_scroll_scale values make scrolling more sensitive.
+Plain vt(4) scrollback behavior still depends on what consumes console mouse
+wheel events.
 
 For a console-only setup without the Xorg/uinput backend:
 

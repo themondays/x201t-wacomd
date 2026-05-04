@@ -34,6 +34,7 @@
 #define DEFAULT_CONSOLE_SCALE 32
 #define DEFAULT_CONSOLE_WIDTH 1280
 #define DEFAULT_CONSOLE_HEIGHT 800
+#define DEFAULT_ERASER_SCROLL_SCALE 768
 #define CONSOLE_MAX_DELTA 255
 
 #define ISDV4_QUERY "*"
@@ -75,12 +76,19 @@ enum console_mode {
 	CONSOLE_MODE_RELATIVE
 };
 
+enum eraser_mode {
+	ERASER_MODE_NONE,
+	ERASER_MODE_SCROLL
+};
+
 struct console_backend {
 	int fd;
 	int enabled;
 	int extioctl;
 	enum console_mode mode;
+	enum eraser_mode eraser_mode;
 	int scale;
+	int eraser_scroll_scale;
 	int width;
 	int height;
 	int x_max;
@@ -90,6 +98,9 @@ struct console_backend {
 	int last_y;
 	int rem_x;
 	int rem_y;
+	int eraser_have_last;
+	int eraser_last_y;
+	int eraser_rem_y;
 	int last_buttons;
 	int pointer_x;
 	int pointer_y;
@@ -111,7 +122,8 @@ usage(const char *argv0)
 	fprintf(stderr,
 	    "Usage: %s [-f] [-v] [-U] [-C] [-d serial_device] [-u uinput_device]\n"
 	    "          [-c consolectl_device] [-b baud] [-M console_mode]\n"
-	    "          [-S console_scale] [-W console_width] [-H console_height]\n"
+	    "          [-E eraser_mode] [-S console_scale] [-Z eraser_scroll_scale]\n"
+	    "          [-W console_width] [-H console_height]\n"
 	    "\n"
 	    "Defaults:\n"
 	    "  serial_device: %s\n"
@@ -120,15 +132,19 @@ usage(const char *argv0)
 	    "  baud:          %d\n"
 	    "  console_mode:  absolute\n"
 	    "  console_scale: %d\n"
+	    "  eraser_mode:   scroll\n"
+	    "  eraser_scroll_scale: %d\n"
 	    "  console_size:  %dx%d\n"
 	    "\n"
 	    "Options:\n"
 	    "  -C  also emit FreeBSD tty console mouse events through consolectl\n"
+	    "  -E  eraser mode for tty console: scroll or none\n"
 	    "  -M  console mode: absolute or relative\n"
 	    "  -U  disable the uinput backend; useful for console-only installs\n",
 	    argv0, DEFAULT_SERIAL_DEV, DEFAULT_UINPUT_DEV,
 	    DEFAULT_CONSOLECTL_DEV, DEFAULT_BAUD, DEFAULT_CONSOLE_SCALE,
-	    DEFAULT_CONSOLE_WIDTH, DEFAULT_CONSOLE_HEIGHT);
+	    DEFAULT_ERASER_SCROLL_SCALE, DEFAULT_CONSOLE_WIDTH,
+	    DEFAULT_CONSOLE_HEIGHT);
 }
 
 static int
@@ -477,17 +493,42 @@ parse_console_mode(const char *value, enum console_mode *mode)
 	return -1;
 }
 
+static const char *
+eraser_mode_name(enum eraser_mode mode)
+{
+	return mode == ERASER_MODE_SCROLL ? "scroll" : "none";
+}
+
+static int
+parse_eraser_mode(const char *value, enum eraser_mode *mode)
+{
+	if (strcmp(value, "none") == 0 || strcmp(value, "off") == 0 ||
+	    strcmp(value, "disabled") == 0) {
+		*mode = ERASER_MODE_NONE;
+		return 0;
+	}
+	if (strcmp(value, "scroll") == 0 || strcmp(value, "wheel") == 0) {
+		*mode = ERASER_MODE_SCROLL;
+		return 0;
+	}
+
+	return -1;
+}
+
 static int
 open_console_backend(const char *path, int scale, enum console_mode mode,
-    int width, int height, const struct tablet_ranges *ranges,
-    struct console_backend *console)
+    enum eraser_mode eraser_mode, int eraser_scroll_scale, int width,
+    int height, const struct tablet_ranges *ranges, struct console_backend *console)
 {
 	mouse_info_t mouse;
 
 	memset(console, 0, sizeof(*console));
 	console->fd = -1;
 	console->mode = mode;
+	console->eraser_mode = eraser_mode;
 	console->scale = scale > 0 ? scale : DEFAULT_CONSOLE_SCALE;
+	console->eraser_scroll_scale = eraser_scroll_scale > 0 ?
+	    eraser_scroll_scale : DEFAULT_ERASER_SCROLL_SCALE;
 	console->width = width > 1 ? width : DEFAULT_CONSOLE_WIDTH;
 	console->height = height > 1 ? height : DEFAULT_CONSOLE_HEIGHT;
 	console->x_max = ranges->x_max > 0 ? ranges->x_max : DEFAULT_X_MAX;
@@ -508,10 +549,12 @@ open_console_backend(const char *path, int scale, enum console_mode mode,
 
 	if (g_verbose) {
 		fprintf(stderr,
-		    "console: device=%s mode=%s ioctl=%s scale=%d size=%dx%d\n",
+		    "console: device=%s mode=%s eraser=%s ioctl=%s scale=%d eraser_scroll_scale=%d size=%dx%d\n",
 		    path, console_mode_name(console->mode),
+		    eraser_mode_name(console->eraser_mode),
 		    console->extioctl ? "motion/button" : "action",
-		    console->scale, console->width, console->height);
+		    console->scale, console->eraser_scroll_scale,
+		    console->width, console->height);
 	}
 
 	return 0;
@@ -588,6 +631,30 @@ send_console_motion(struct console_backend *console, int dx, int dy, int buttons
 		    console->height - 1);
 		dx -= sx;
 		dy -= sy;
+	}
+
+	return 0;
+}
+
+static int
+send_console_scroll(struct console_backend *console, int dz)
+{
+	mouse_info_t mouse;
+
+	if (dz == 0)
+		return 0;
+
+	memset(&mouse, 0, sizeof(mouse));
+	mouse.operation = console->extioctl ? MOUSE_MOTION_EVENT : MOUSE_ACTION;
+	mouse.u.data.x = 0;
+	mouse.u.data.y = 0;
+	mouse.u.data.z = dz;
+	mouse.u.data.buttons = console->last_buttons;
+	if (ioctl(console->fd, CONS_MOUSECTL, &mouse) == -1) {
+		perror(console->extioctl ?
+		    "CONS_MOUSECTL MOUSE_MOTION_EVENT scroll" :
+		    "CONS_MOUSECTL MOUSE_ACTION scroll");
+		return -1;
 	}
 
 	return 0;
@@ -671,6 +738,44 @@ send_console_button_events(struct console_backend *console, int buttons)
 }
 
 static int
+emit_console_eraser_scroll(struct console_backend *console,
+    const struct pen_packet *pkt)
+{
+	int dz = 0;
+
+	if (console->last_buttons != 0 &&
+	    send_console_button_events(console, 0) == -1)
+		return -1;
+	console->last_buttons = 0;
+	console->have_last = 0;
+	console->rem_x = 0;
+	console->rem_y = 0;
+
+	if (!pkt->proximity || !pkt->eraser) {
+		console->eraser_have_last = 0;
+		console->eraser_rem_y = 0;
+		return 0;
+	}
+	if (!console->eraser_have_last) {
+		console->eraser_last_y = pkt->y;
+		console->eraser_have_last = 1;
+		return 0;
+	}
+
+	dz = scaled_delta(pkt->y - console->eraser_last_y,
+	    &console->eraser_rem_y, console->eraser_scroll_scale);
+	console->eraser_last_y = pkt->y;
+
+	if (send_console_scroll(console, dz) == -1)
+		return -1;
+
+	if (g_verbose)
+		fprintf(stderr, "console: eraser-scroll dz=%d\n", dz);
+
+	return 0;
+}
+
+static int
 console_absolute_target(struct console_backend *console,
     const struct pen_packet *pkt, int *target_x, int *target_y)
 {
@@ -706,6 +811,8 @@ emit_console_absolute_pen(struct console_backend *console,
 		console->last_y = pkt->y;
 	} else {
 		console->have_last = 0;
+		console->eraser_have_last = 0;
+		console->eraser_rem_y = 0;
 	}
 
 	if (buttons != console->last_buttons &&
@@ -734,6 +841,8 @@ emit_console_relative_pen(struct console_backend *console,
 		console->have_last = 0;
 		console->rem_x = 0;
 		console->rem_y = 0;
+		console->eraser_have_last = 0;
+		console->eraser_rem_y = 0;
 	} else if (!console->have_last) {
 		console->last_x = pkt->x;
 		console->last_y = pkt->y;
@@ -771,6 +880,10 @@ emit_console_pen(struct console_backend *console, const struct pen_packet *pkt)
 
 	if (!console->enabled)
 		return 0;
+
+	if (console->eraser_mode == ERASER_MODE_SCROLL &&
+	    pkt->proximity && pkt->eraser)
+		return emit_console_eraser_scroll(console, pkt);
 
 	buttons = console_buttons(pkt);
 
@@ -855,7 +968,9 @@ main(int argc, char **argv)
 	int uinput_fd = -1;
 	int baud = DEFAULT_BAUD;
 	enum console_mode console_mode = CONSOLE_MODE_ABSOLUTE;
+	enum eraser_mode eraser_mode = ERASER_MODE_SCROLL;
 	int console_scale = DEFAULT_CONSOLE_SCALE;
+	int eraser_scroll_scale = DEFAULT_ERASER_SCROLL_SCALE;
 	int console_width = DEFAULT_CONSOLE_WIDTH;
 	int console_height = DEFAULT_CONSOLE_HEIGHT;
 	int console_enabled = 0;
@@ -866,7 +981,7 @@ main(int argc, char **argv)
 	memset(&console, 0, sizeof(console));
 	console.fd = -1;
 
-	while ((ch = getopt(argc, argv, "b:c:Cd:fH:hM:S:u:UvW:")) != -1) {
+	while ((ch = getopt(argc, argv, "b:c:Cd:E:fH:hM:S:u:UvW:Z:")) != -1) {
 		switch (ch) {
 		case 'b':
 			baud = atoi(optarg);
@@ -879,6 +994,12 @@ main(int argc, char **argv)
 			break;
 		case 'd':
 			serial_dev = optarg;
+			break;
+		case 'E':
+			if (parse_eraser_mode(optarg, &eraser_mode) == -1) {
+				fprintf(stderr, "invalid eraser mode: %s\n", optarg);
+				return 2;
+			}
 			break;
 		case 'f':
 			foreground = 1;
@@ -916,6 +1037,13 @@ main(int argc, char **argv)
 			console_width = atoi(optarg);
 			if (console_width <= 1) {
 				fprintf(stderr, "invalid console width: %s\n", optarg);
+				return 2;
+			}
+			break;
+		case 'Z':
+			eraser_scroll_scale = atoi(optarg);
+			if (eraser_scroll_scale <= 0) {
+				fprintf(stderr, "invalid eraser scroll scale: %s\n", optarg);
 				return 2;
 			}
 			break;
@@ -961,8 +1089,8 @@ main(int argc, char **argv)
 
 	if (console_enabled) {
 		if (open_console_backend(consolectl_dev, console_scale,
-		    console_mode, console_width, console_height, &ranges,
-		    &console) == -1)
+		    console_mode, eraser_mode, eraser_scroll_scale,
+		    console_width, console_height, &ranges, &console) == -1)
 			return 1;
 	}
 

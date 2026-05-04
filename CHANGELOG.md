@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.1 - 2026-05-05
+
+Added:
+
+- Tty console eraser-scroll mode through `/dev/consolectl` mouse Z-axis
+  events.
+- rc.conf knobs for console eraser mode and scroll sensitivity.
+
 ## v0.1.0 - 2026-05-05
 
 Initial standalone GitHub release.

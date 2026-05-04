@@ -10,7 +10,7 @@
 name="x201t_wacomd"
 rcvar="x201t_wacomd_enable"
 command="/usr/sbin/daemon"
-procname="%%PREFIX%%/sbin/x201t-wacomd"
+procname="/usr/local/sbin/x201t-wacomd"
 pidfile="/var/run/${name}.pid"
 start_postcmd="${name}_poststart"
 
@@ -25,6 +25,8 @@ load_rc_config "$name"
 : ${x201t_wacomd_consolectl:="/dev/consolectl"}
 : ${x201t_wacomd_console_mode:="absolute"}
 : ${x201t_wacomd_console_scale:="32"}
+: ${x201t_wacomd_console_eraser_mode:="scroll"}
+: ${x201t_wacomd_console_eraser_scroll_scale:="768"}
 : ${x201t_wacomd_console_width:="1280"}
 : ${x201t_wacomd_console_height:="800"}
 : ${x201t_wacomd_console_cursor_enable:="YES"}
@@ -38,7 +40,7 @@ else
 fi
 
 if checkyesno x201t_wacomd_console_enable; then
-	x201t_wacomd_args="${x201t_wacomd_args} -C -c ${x201t_wacomd_consolectl} -M ${x201t_wacomd_console_mode} -S ${x201t_wacomd_console_scale} -W ${x201t_wacomd_console_width} -H ${x201t_wacomd_console_height}"
+	x201t_wacomd_args="${x201t_wacomd_args} -C -c ${x201t_wacomd_consolectl} -M ${x201t_wacomd_console_mode} -S ${x201t_wacomd_console_scale} -E ${x201t_wacomd_console_eraser_mode} -Z ${x201t_wacomd_console_eraser_scroll_scale} -W ${x201t_wacomd_console_width} -H ${x201t_wacomd_console_height}"
 fi
 
 x201t_wacomd_poststart()
